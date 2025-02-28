@@ -1,0 +1,4 @@
+moduleName=interaction-subscriber-extensions
+moduleVersion=1.0
+extensionClasses=\
+  org.spockframework.smoke.interaction.SubscriberInteractions

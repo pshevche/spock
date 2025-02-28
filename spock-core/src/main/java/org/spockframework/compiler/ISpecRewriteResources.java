@@ -19,18 +19,15 @@ package org.spockframework.compiler;
 import org.codehaus.groovy.ast.expr.Expression;
 import org.codehaus.groovy.ast.expr.MethodCallExpression;
 import org.codehaus.groovy.ast.expr.VariableExpression;
+import org.spockframework.compiler.interaction.InteractionRewriteResources;
 import org.spockframework.compiler.model.Block;
 import org.spockframework.compiler.model.Method;
 import org.spockframework.compiler.model.Spec;
 
-public interface ISpecRewriteResources extends IRewriteResources {
+public interface ISpecRewriteResources extends InteractionRewriteResources {
   Spec getCurrentSpec();
-
-  Method getCurrentMethod();
 
   Block getCurrentBlock();
 
   VariableExpression captureOldValue(Expression oldValue);
-
-  MethodCallExpression getMockInvocationMatcher();
 }

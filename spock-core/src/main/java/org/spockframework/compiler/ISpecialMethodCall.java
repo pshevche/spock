@@ -59,6 +59,8 @@ public interface ISpecialMethodCall {
 
   boolean isMatch(ClosureExpression closureExpr);
 
+  boolean isInteractionHelper();
+
   ClosureExpression getClosureExpr();
 
   void expand();

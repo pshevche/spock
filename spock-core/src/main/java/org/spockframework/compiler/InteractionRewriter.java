@@ -16,6 +16,7 @@
 
 package org.spockframework.compiler;
 
+import org.spockframework.compiler.interaction.InteractionRewriteResources;
 import org.spockframework.lang.Wildcard;
 import org.spockframework.util.*;
 
@@ -36,7 +37,7 @@ import static org.spockframework.compiler.AstUtil.primitiveConstExpression;
  * @author Peter Niederwieser
  */
 public class InteractionRewriter {
-  private final ISpecRewriteResources resources;
+  private final InteractionRewriteResources resources;
   private final ClosureExpression activeWithOrMockClosure;
 
   // information about the interaction; filled in by parse()
@@ -52,7 +53,7 @@ public class InteractionRewriter {
   // "new InteractionBuilder(..).setCount(..).setTarget(..).setMethod(..).addArg(..).addResult(..).build()"
   private Expression builderExpr;
 
-  public InteractionRewriter(ISpecRewriteResources resources, @Nullable ClosureExpression activeWithOrMockClosure) {
+  public InteractionRewriter(InteractionRewriteResources resources, @Nullable ClosureExpression activeWithOrMockClosure) {
     this.resources = resources;
     this.activeWithOrMockClosure = activeWithOrMockClosure;
   }
@@ -92,7 +93,7 @@ public class InteractionRewriter {
 
     Expression expr = parseCount(parseResults(stat.getExpression()));
     boolean interaction = (count != null || !responses.isEmpty()) && parseCall(expr);
-    if (interaction && resources.getCurrentMethod().getAst().isStatic()) {
+    if (interaction && resources.getCurrentMethod().isStatic()) {
       throw new InvalidSpecCompileException(stat, "Interactions cannot be declared in static scope");
     }
 

@@ -120,6 +120,11 @@ public class NoSpecialMethodCall implements ISpecialMethodCall {
   }
 
   @Override
+  public boolean isInteractionHelper() {
+    return false;
+  }
+
+  @Override
   public ClosureExpression getClosureExpr() {
     throw new UnsupportedOperationException();
   }

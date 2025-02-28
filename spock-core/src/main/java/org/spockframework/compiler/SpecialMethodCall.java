@@ -45,10 +45,18 @@ public class SpecialMethodCall implements ISpecialMethodCall {
   @Nullable
   private final ClosureExpression closureExpr;
   private final boolean conditionBlock;
+  private final boolean isInteractionHelperCall;
 
-  public SpecialMethodCall(String methodName, Expression inferredName, Expression inferredType,
-      MethodCallExpression methodCallExpr, @Nullable BinaryExpression binaryExpr,
-      @Nullable ClosureExpression closureExpr, boolean conditionBlock) {
+  public SpecialMethodCall(
+    String methodName,
+    Expression inferredName,
+    Expression inferredType,
+    MethodCallExpression methodCallExpr,
+    @Nullable BinaryExpression binaryExpr,
+    @Nullable ClosureExpression closureExpr,
+    boolean conditionBlock,
+    boolean isInteractionHelperCall
+  ) {
     this.methodName = methodName;
     this.inferredName = inferredName;
     this.inferredType = inferredType;
@@ -56,6 +64,7 @@ public class SpecialMethodCall implements ISpecialMethodCall {
     this.methodCallExpr = methodCallExpr;
     this.closureExpr = closureExpr;
     this.conditionBlock = conditionBlock;
+    this.isInteractionHelperCall = isInteractionHelperCall;
   }
 
   @Override
@@ -92,6 +101,7 @@ public class SpecialMethodCall implements ISpecialMethodCall {
   public boolean isWithCall() {
     return isMethodName(Identifiers.WITH);
   }
+
   @Override
   public boolean isConditionMethodCall() {
     return isMethodName(Identifiers.WITH) || isMethodName(Identifiers.VERIFY_EACH);
@@ -160,6 +170,11 @@ public class SpecialMethodCall implements ISpecialMethodCall {
   }
 
   @Override
+  public boolean isInteractionHelper() {
+    return isInteractionHelperCall;
+  }
+
+  @Override
   @Nullable
   public ClosureExpression getClosureExpr() {
     return closureExpr;
@@ -182,8 +197,9 @@ public class SpecialMethodCall implements ISpecialMethodCall {
                                         AstNodeCache nodeCache) {
     boolean builtInCall = checkIsBuiltInMethodCall(methodCallExpr);
     boolean conditionBlock = checkIsConditionBlock(methodCallExpr);
+    boolean isInteractionHelperCall = checkIsInteractionHelperCall(methodCallExpr);
 
-    if (!(builtInCall || conditionBlock)) return null;
+    if (!(builtInCall || conditionBlock || isInteractionHelperCall)) return null;
 
     String methodName = methodCallExpr.getMethodAsString();
     Expression inferredName;
@@ -208,7 +224,7 @@ public class SpecialMethodCall implements ISpecialMethodCall {
     }
     wrapCastedConstructorArgs(arguments, nodeCache);
 
-    return new SpecialMethodCall(methodName, inferredName, inferredType, methodCallExpr, binaryExpr, closureExpr, conditionBlock);
+    return new SpecialMethodCall(methodName, inferredName, inferredType, methodCallExpr, binaryExpr, closureExpr, conditionBlock, isInteractionHelperCall);
   }
 
   private static void wrapCastedConstructorArgs(List<Expression> arguments, AstNodeCache nodeCache) {
@@ -266,7 +282,7 @@ public class SpecialMethodCall implements ISpecialMethodCall {
 
   public String toString() {
     return String.format("method name: %s\ninferred name: %s\ninferred type: %s\nmethod call:%s\nclosure: %s\ncondition block: %s\n",
-        methodName, inferredName, inferredType, methodCallExpr, closureExpr, conditionBlock);
+      methodName, inferredName, inferredType, methodCallExpr, closureExpr, conditionBlock);
   }
 
   private static boolean checkIsBuiltInMethodCall(MethodCallExpression expr) {
@@ -292,5 +308,27 @@ public class SpecialMethodCall implements ISpecialMethodCall {
     }
 
     return false;
+  }
+
+  private static boolean checkIsInteractionHelperCall(MethodCallExpression methodCallExpr) {
+    String methodName = methodCallExpr.getMethodAsString();
+    if (methodName != null) {
+      return methodName.contains("receivedExactlyOnce");
+    }
+
+    return false;
+
+//    try {
+//      // if targetType has any method with a parameter or return type that is not in the
+//      // compile classpath this call will fail with a NoClassDefFoundError
+//      List<MethodNode> methods = targetType.getMethods(methodName);
+//      for (MethodNode method : methods) {
+//        for (AnnotationNode annotation : method.getAnnotations()) {
+//          if (annotation.getClassNode().getName().equals(Interaction.class.getName())) return true;
+//        }
+//      }
+//    } catch (NoClassDefFoundError e) {
+//      // just assume there is no condition block and return false
+//    }
   }
 }

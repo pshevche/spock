@@ -657,8 +657,8 @@ public class SpecRewriter extends AbstractSpecVisitor implements ISpecRewriteRes
   }
 
   @Override
-  public Method getCurrentMethod() {
-    return method;
+  public MethodNode getCurrentMethod() {
+    return method.getAst();
   }
 
   @Override

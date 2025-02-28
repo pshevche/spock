@@ -15,13 +15,17 @@
 
 package org.spockframework.compiler;
 
+import org.codehaus.groovy.ast.MethodNode;
 import org.codehaus.groovy.ast.Parameter;
 import org.codehaus.groovy.ast.expr.*;
 import org.codehaus.groovy.ast.stmt.AssertStatement;
 import org.codehaus.groovy.ast.stmt.ExpressionStatement;
 import org.codehaus.groovy.ast.stmt.Statement;
 import org.codehaus.groovy.syntax.Types;
-import org.spockframework.compiler.model.*;
+import org.spockframework.compiler.model.Block;
+import org.spockframework.compiler.model.ExpectBlock;
+import org.spockframework.compiler.model.FilterBlock;
+import org.spockframework.compiler.model.ThenBlock;
 import org.spockframework.util.Identifiers;
 import org.spockframework.util.Nullable;
 
@@ -37,7 +41,7 @@ import static org.spockframework.compiler.condition.ImplicitConditionsUtils.isIm
  * - rewrite interactions,
  * - rewrite core language primitives (members of class Specification)
  * - Forbid
- *
+ * <p>
  * Also records whether conditions and interactions were found.
  *
  * @author Peter Niederwieser
@@ -63,8 +67,8 @@ public class DeepBlockRewriter extends AbstractDeepBlockRewriter {
     super.visitAssertStatement(stat);
     conditionFound();
     replaceVisitedStatementWith(
-        ConditionRewriter.rewriteExplicitCondition(stat, resources,
-          getValueRecorderSuffix(), getErrorCollectorSuffix()));
+      ConditionRewriter.rewriteExplicitCondition(stat, resources,
+        getValueRecorderSuffix(), getErrorCollectorSuffix()));
   }
 
   private String getValueRecorderSuffix() {
@@ -102,7 +106,7 @@ public class DeepBlockRewriter extends AbstractDeepBlockRewriter {
 
   @Override
   protected void doVisitBinaryExpression(BinaryExpression expression) {
-    if(insideInteraction) {
+    if (insideInteraction) {
       /* We are inside an interaction expression, e.g., mock.foo({it > 0}) >> { result }
          We don't want the closures to the right of the right shift to be treated
          as condition closures, whereas the method argument closures should be treated
@@ -150,18 +154,19 @@ public class DeepBlockRewriter extends AbstractDeepBlockRewriter {
     super.doVisitMethodCallExpression(expr);
 
     boolean handled = handleMockCall(expr)
-        || handleThrownCall(expr)
-        || handleOldCall(expr)
-        || handleInteractionBlockCall(expr)
-        || handleImplicitCallOnMethodParam(expr)
-        || forbidUseOfSuperInFixtureMethod(expr);
+      || handleThrownCall(expr)
+      || handleOldCall(expr)
+      || handleInteractionBlockCall(expr)
+      || handleInteractionHelperCall(expr)
+      || handleImplicitCallOnMethodParam(expr)
+      || forbidUseOfSuperInFixtureMethod(expr);
   }
 
   private boolean handleImplicitCallOnMethodParam(MethodCallExpression expr) {
     if (!expr.isImplicitThis()) return false;
 
     String methodName = expr.getMethodAsString();
-    Parameter[] params = resources.getCurrentMethod().getAst().getParameters();
+    Parameter[] params = resources.getCurrentMethod().getParameters();
 
     for (Parameter param : params) {
       if (param.getName().equals(methodName)) {
@@ -183,7 +188,7 @@ public class DeepBlockRewriter extends AbstractDeepBlockRewriter {
     // we should at least support multiple setup-blocks.
     if (block instanceof ExpectBlock) {
       resources.getErrorReporter().error(stat, "Interactions are not allowed in '%s' blocks. " +
-          "Put them before the '%s' block or into a 'then' block.", block.getName(), block.getName());
+        "Put them before the '%s' block or into a 'then' block.", block.getName(), block.getName());
       return true;
     }
 
@@ -194,10 +199,10 @@ public class DeepBlockRewriter extends AbstractDeepBlockRewriter {
 
   private boolean handleImplicitCondition(ExpressionStatement stat) {
     if (!(stat == currTopLevelStat && isThenOrExpectOrFilterBlock()
-        || currSpecialMethodCall.isConditionMethodCall()
-        || currSpecialMethodCall.isConditionBlock()
-        || currSpecialMethodCall.isGroupConditionBlock()
-        || (insideInteraction && interactionClosureDepth == 1))) {
+      || currSpecialMethodCall.isConditionMethodCall()
+      || currSpecialMethodCall.isConditionBlock()
+      || currSpecialMethodCall.isGroupConditionBlock()
+      || (insideInteraction && interactionClosureDepth == 1))) {
       return false;
     }
     if (!isImplicitCondition(stat)) return false;
@@ -244,7 +249,7 @@ public class DeepBlockRewriter extends AbstractDeepBlockRewriter {
   private boolean handleMockCall(MethodCallExpression expr) {
     if (!currSpecialMethodCall.isTestDouble(expr)) return false;
 
-    if (resources.getCurrentMethod().getAst().isStatic()) {
+    if (resources.getCurrentMethod().isStatic()) {
       resources.getErrorReporter().error(expr, "Mocks cannot be created in static scope");
       // expand nevertheless so that inner scope (if any) won't trip over this again
     }
@@ -304,6 +309,18 @@ public class DeepBlockRewriter extends AbstractDeepBlockRewriter {
     return true;
   }
 
+  private boolean handleInteractionHelperCall(MethodCallExpression expr) {
+    if (!currSpecialMethodCall.isInteractionHelper()) return false;
+
+    ArgumentListExpression arguments = (ArgumentListExpression) expr.getArguments();
+    ArgumentListExpression newArguments = new ArgumentListExpression();
+    newArguments.addExpression(VariableExpression.THIS_EXPRESSION);
+    arguments.forEach(newArguments::addExpression);
+    expr.setArguments(newArguments);
+
+    return true;
+  }
+
   private void defineRecorders(ClosureExpression expr) {
     if (groupConditionFound) {
       resources.getErrorRecorders().defineErrorCollector(AstUtil.getStatements(expr), getErrorCollectorSuffix());
@@ -317,16 +334,16 @@ public class DeepBlockRewriter extends AbstractDeepBlockRewriter {
   // because it is most likely a mistake (user thinks he is overriding
   // the base method and doesn't know that it will be run automatically)
   private boolean forbidUseOfSuperInFixtureMethod(MethodCallExpression expr) {
-    Method currMethod = resources.getCurrentMethod();
+    MethodNode currMethod = resources.getCurrentMethod();
     Expression target = expr.getObjectExpression();
 
-    if (currMethod instanceof FixtureMethod
-        && target instanceof VariableExpression
-        && ((VariableExpression)target).isSuperExpression()
-        && currMethod.getName().equals(expr.getMethodAsString())) {
+    // TODO pshevche: fix it up
+    if (target instanceof VariableExpression
+      && ((VariableExpression) target).isSuperExpression()
+      && currMethod.getName().equals(expr.getMethodAsString())) {
       resources.getErrorReporter().error(expr,
-          "A base class fixture method should not be called explicitly " +
-              "because it is always invoked automatically by the framework");
+        "A base class fixture method should not be called explicitly " +
+          "because it is always invoked automatically by the framework");
       return true;
     }
 
